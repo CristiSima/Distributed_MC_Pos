@@ -8,7 +8,19 @@
         <a href="/control/progres">Progress</a>
     </nav> -->
 
-    <progress value="{{job['threads_finished']}}" max="{{job['no_threads']}}" style="height:30px; width: -webkit-fill-available;"></progress>
+    <!-- <progress value="{{job['threads_finished']}}" max="{{job['no_threads']}}" style="height:30px; width: -webkit-fill-available;"></progress>
+    <br> -->
+
+    <br>
+
+
+    {% if job["started"] %}
+        RUNNING
+    {% else %}
+        WAITING
+    {% endif %}
+
+    <br>
     <br>
 
     <table style="border-spacing: 10px; ">
@@ -32,6 +44,10 @@
             <td>Found:</td>
             <td style="text-align: end;">{{ len(possitions) }}</td>
         </tr>
+        <tr>
+            <td>Estimated Duration:</td>
+            <td style="text-align: end;">{{ job["estimated_duration"] }}</td>
+        </tr>
     </table>
 
 
@@ -43,11 +59,15 @@
             <th>CPU Test duration</th>
             <th>CPU Score</th>
             <th>CPU Enabled</th>
+            <th>CPU Scheduled Threads</th>
+            <th>CPU Estimated Duration</th>
 
             <th>GPU Cores</th>
             <th>GPU Test duration</th>
             <th>GPU Score</th>
             <th>GPU Enabled</th>
+            <th>GPU Scheduled Threads</th>
+            <th>GPU Estimated Duration</th>
         </thead>
         <tbody>
             {% for worker in workers.values() %}
@@ -60,7 +80,10 @@
                     <td>{{round(worker.cpu_info["score"]*worker.cpu_info["cores"])}}</td>
                     <td><a href="/control/update_enabled/{{worker.id}}/cpu/{{not(worker.cpu_enabled)}}">
                         <input onclick="this.parentElement.click()" type="checkbox" {{ "checked=1" if worker.cpu_enabled }}></a></td>
+                    <td>{{ worker.cpu_info["scheduled_threads"] }}</td>
+                    <td>{{ worker.cpu_info["estimated_duration"] }}</td>
                 {% else %}
+                    <td>---</td>
                     <td>---</td>
                     <td>---</td>
                     <td>---</td>
@@ -73,7 +96,10 @@
                     <td>{{(round(worker.gpu_info["score"]*worker.gpu_info["cores"]))}}</td>
                     <td><a href="/control/update_enabled/{{worker.id}}/gpu/{{not(worker.gpu_enabled)}}">
                         <input onclick="this.parentElement.click()" type="checkbox" {{ "checked=1" if worker.gpu_enabled }}></a></td>
+                    <td>{{ worker.gpu_info["scheduled_threads"] }}</td>
+                    <td>{{ worker.gpu_info["estimated_duration"] }}</td>
                 {% else %}
+                    <td>---</td>
                     <td>---</td>
                     <td>---</td>
                     <td>---</td>
@@ -83,6 +109,8 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <br>
 
     <a href="/control/start_job">START</a>
 

@@ -86,9 +86,9 @@ def cpu_process(job):
 
     print("cpu", cpu_work)
     exec_name=worker_lib.compile_c(
-        num_threads=cpu_work["workers"],
-        thread_overload=1,
-        worker_offset=cpu_work["workers_offset"],
+        num_threads=worker_info["cpu"]["cores"],
+        thread_overload=cpu_work["threads"]//worker_info["cpu"]["cores"],
+        worker_offset=cpu_work["threads_offset"],
         total_workers=job["no_threads"],
         world_limit=job["search_lim"],
         check_func=None
@@ -101,7 +101,7 @@ def cpu_process(job):
     print("possitions:", possitions)
     post(BASE_URL+f"submit/{current_id}/cpu", {
         "possitions": possitions,
-        "threads_processed": cpu_work["workers"]
+        "threads_processed": cpu_work["threads"]
     })
 cpu_queue, cpu_thread=create_processor(cpu_process)
 cpu_thread.start()
@@ -112,12 +112,12 @@ def gpu_process(job):
         return
 
     print("gpu", gpu_work)
-    print(gpu_work["workers"]/worker_info["gpu"]["block_dim"])
+    print(gpu_work["threads"]/worker_info["gpu"]["block_dim"])
     exec_name=worker_lib.compile_cuda(
-        num_blocks=roundup(gpu_work["workers"]/worker_info["gpu"]["block_dim"]),
+        num_blocks=worker_info["gpu"]["cores"]//worker_info["gpu"]["block_dim"],
         num_threads=worker_info["gpu"]["block_dim"],
-        thread_overload=1,
-        worker_offset=gpu_work["workers_offset"],
+        thread_overload=gpu_work["threads"]//worker_info["gpu"]["cores"],
+        worker_offset=gpu_work["threads_offset"],
         total_workers=job["no_threads"],
         world_limit=job["search_lim"],
         check_func=None
@@ -130,7 +130,7 @@ def gpu_process(job):
     print("possitions:", possitions)
     post(BASE_URL+f"submit/{current_id}/gpu", {
         "possitions": possitions,
-        "threads_processed": gpu_work["workers"]
+        "threads_processed": gpu_work["threads"]
     })
 gpu_queue, gpu_thread=create_processor(gpu_process)
 gpu_thread.start()
@@ -143,11 +143,9 @@ while True:
     resp,resp_code = get(BASE_URL+"sync/"+current_id)
     if resp_code==404:
         get_id()
-
-    cpu_queue.put(resp)
-
-    gpu_queue.put(resp)
-
+    else:
+        cpu_queue.put(resp)
+        gpu_queue.put(resp)
 
     print(resp)
     time.sleep(5)

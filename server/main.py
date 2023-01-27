@@ -1,6 +1,7 @@
 from flask import Flask, Blueprint, request, render_template, redirect
 from uuid import uuid1 as uuid, UUID
 from threading import Lock
+import distribute
 app = Flask(__name__)
 
 worker = Blueprint('worker', __name__, url_prefix="/worker")
@@ -20,14 +21,22 @@ class Worker:
         self.id=uuid()
 
         self.cpu_info=cpu_info
-        self.cpu_enabled=True
+        self.cpu_enabled=False
         self.cpu_working=False
+        self.cpu_finished=False
 
         self.gpu_info=gpu_info
-        self.gpu_enabled=True
+        self.gpu_enabled=False
         self.gpu_working=False
+        self.gpu_finished=False
 
         workers[self.id]=self
+
+        cpu_info["scheduled_threads"]=cpu_info["estimated_duration"]=None
+        gpu_info["scheduled_threads"]=gpu_info["estimated_duration"]=None
+
+        cpu_info["id"]=self.id, "cpu"
+        gpu_info["id"]=self.id, "gpu"
 
     @job_locked
     def get_cpu_work(self):
@@ -37,19 +46,18 @@ class Worker:
         if self.cpu_working:
             return "WORKING"
 
-        threads_left=max(job["no_threads"]-job["threads_started"], 0)
-        if threads_left == 0:
+        if not self.cpu_info["scheduled_threads"] or self.cpu_finished:
             return "JOB_DONE"
 
-        workers_no=min(threads_left, self.cpu_info["cores"])
+        threads_no=self.cpu_info["scheduled_threads"]
 
-        workers_offset=job["threads_started"]
-        job["threads_started"]=job["threads_started"]+workers_no
+        threads_offset=job["threads_started"]
+        job["threads_started"]=job["threads_started"]+threads_no
 
         self.cpu_working=True
         return {
-            "workers_offset":workers_offset,
-            "workers":workers_no
+            "threads_offset":threads_offset,
+            "threads":threads_no
         }
 
     @job_locked
@@ -60,29 +68,30 @@ class Worker:
         if self.gpu_working:
             return "WORKING"
 
-        threads_left=max(job["no_threads"]-job["threads_started"], 0)
-        if threads_left == 0:
+        if not self.gpu_info["scheduled_threads"] or self.gpu_finished:
             return "JOB_DONE"
 
-        workers_no=min(threads_left, self.gpu_info["cores"])
+        threads_no=self.gpu_info["scheduled_threads"]
 
-        workers_offset=job["threads_started"]
-        job["threads_started"]=job["threads_started"]+workers_no
+        threads_offset=job["threads_started"]
+        job["threads_started"]=job["threads_started"]+threads_no
 
         self.gpu_working=True
         return {
-            "workers_offset":workers_offset,
-            "workers":workers_no
+            "threads_offset":threads_offset,
+            "threads":threads_no
         }
 
 job_lock=Lock()
 job={
-    "no_threads":46080,
-    "threads_started":2,
-    "threads_finished":2,
-    "started":False,
+    "no_threads": None,
+    "threads_started": 0,
+    "threads_finished": 0,
+    "started": False,
 
-    "search_lim": 4_00_000,
+    "search_lim": 2_00_000,
+
+    "estimated_duration": None,
 
     # "check_func": None,
     "check_func": [
@@ -91,6 +100,41 @@ job={
 }
 possitions=[]
 
+def distribute_job():
+    for worker in workers.values():
+        worker.cpu_info["scheduled_threads"]=worker.gpu_info["scheduled_threads"]=None
+        worker.cpu_info["estimated_duration"]=worker.gpu_info["estimated_duration"]=None
+
+    job["estimated_duration"]=None
+    job["no_threads"]=None
+
+    units=[]
+    for worker in workers.values():
+        if worker.cpu_enabled:
+            units.append(worker.cpu_info)
+        if worker.gpu_enabled:
+            units.append(worker.gpu_info)
+
+    # print(units)
+    if len(units) == 0:
+        return
+
+    best_score=min(distribute.get_scores(units))
+    for i, unit in enumerate(units):
+        if unit["score"]==best_score:
+            conf=[0]*len(units)
+            conf[i]=unit["cores"]
+    # print(best_score)
+    # print(conf)
+    conf, best_time=distribute.complete_batch(conf, units)
+    # print(conf, best_time)
+    # print(distribute.calc_proccessing_delta(units, conf))
+    for scheduled_threads, unit, unit_duration in zip(conf, units, distribute.calc_proccessing_times(units, conf)):
+        unit["scheduled_threads"]=scheduled_threads
+        unit["estimated_duration"]=round(unit_duration, 3)
+
+    job["estimated_duration"]=round(best_time, 3)
+    job["no_threads"]=sum(conf)
 
 @worker.get('/debug')
 def worker_debug():
@@ -144,13 +188,17 @@ def worker_submit(worker_id, target):
 
     if target=="cpu":
         worker.cpu_working=False
+        worker.cpu_finished=True
     else:
         worker.gpu_working=False
+        worker.gpu_finished=True
+
 
     for pos in request.json["possitions"]:
         possitions.append(pos)
 
     job["threads_finished"]+=request.json["threads_processed"]
+
 
     return {
         "result": "ok",
@@ -160,6 +208,7 @@ def worker_submit(worker_id, target):
 
 @control.get("/")
 def control_index():
+    distribute_job()
     return render_template("control.html.j2",
         workers=workers, job=job, possitions=possitions,
         len=len, round=round,
