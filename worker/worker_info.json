@@ -1,10 +1,11 @@
 {
     "cpu": {
         "cores": 12,
-        "score": 11.093
+        "score": 39.709
     },
     "gpu": {
         "cores": 4608,
-        "score": 2.04
+        "block_dim": 768,
+        "score": 8.092
     }
 }

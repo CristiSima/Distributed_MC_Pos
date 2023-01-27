@@ -109,6 +109,9 @@ MODIFIER void cool_search(int worker_offset, int total_workers, int workerId) {
     int sum=0;
     int y=-61;
 
+    if(workerId>=total_workers)
+        return;
+
     // for(int x=threadIdx.x+1+worker_offset;x<WORLD_LIMIT;x+=total_workers)
     //     for(int offset=1;offset<x;offset++)
     //     {

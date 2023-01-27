@@ -2,12 +2,13 @@ import subprocess as sp
 import time
 import os
 
-cc="g++"
+cc="gcc"
 
-def compile_c(num_threads, worker_offset, total_workers, world_limit, check_func=None):
+def compile_c(num_threads, thread_overload, worker_offset, total_workers, world_limit, check_func=None):
     exec_name=f"compiled/main_c_{num_threads}_{worker_offset}_{total_workers}"
-    os.system(f"{cc}  main.cpp -O2 -o {exec_name} "
+    os.system(f"{cc}  main.c -O2 -o {exec_name} "
         f" -D NUM_THREADS={num_threads} "
+        f" -D THREAD_OVERLOAD={thread_overload} "
         f" -D WORKER_OFFSET={worker_offset} "
         f" -D TOTAL_WORKERS={total_workers} "
         f" -D WORLD_LIMIT={world_limit} "+
@@ -16,11 +17,12 @@ def compile_c(num_threads, worker_offset, total_workers, world_limit, check_func
 
     return f"{exec_name}.exe"
 
-def compile_cuda(num_blocks, num_threads, worker_offset, total_workers, world_limit, check_func=None):
-    exec_name=f"compiled/main_c_{num_blocks}_{num_threads}_{worker_offset}_{total_workers}"
+def compile_cuda(num_blocks, num_threads, thread_overload, worker_offset, total_workers, world_limit, check_func=None):
+    exec_name=f"compiled/main_cuda_{num_blocks}_{num_threads}_{worker_offset}_{total_workers}"
     os.system(f"nvcc main.cu -o {exec_name} "
         f" -D NUM_BLOCKS={num_blocks} "
         f" -D NUM_THREADS={num_threads} "
+        f" -D THREAD_OVERLOAD={thread_overload} "
         f" -D WORKER_OFFSET={worker_offset} "
         f" -D TOTAL_WORKERS={total_workers} "
         f" -D WORLD_LIMIT={world_limit} "+
@@ -73,7 +75,6 @@ MODIFIER int {self.name}(int x, int y, int z)
         with open("custom.h", "w") as f:
             f.write(self.gen())
 
-# def
 
 if __name__ == "__main__":
     maker=check_maker()
@@ -86,9 +87,16 @@ if __name__ == "__main__":
     # bf_GPU_max_block_multiplyer(768, 60_000)
     # exit()
     block_multiplyer=6
-    # a=compile_c(12, 0, 12, 60_000, "check_custom")
+    c_overload=70
+    cuda_overload=1
+    # a=compile_c(12, c_overload, 0, 12*c_overload, 100_000, "check_custom")
+    # tot,lim=10_000, 100_000
+    # a=compile_c(12, 0, tot, lim, "check_custom")
     # a=compile_cuda(6, 768, 0, 6*768,  60_000, "check_custom")
     # a=compile_cuda(block_multiplyer, 768, 0, block_multiplyer*768,  60_000, "check_custom")
-    a=compile_cuda(block_multiplyer, 768, 0, block_multiplyer*768,  100_000, "check_custom")
+    a=compile_cuda(block_multiplyer, 768, cuda_overload, 0, block_multiplyer*768*cuda_overload,  200_000, "check_custom")
+    # a=compile_cuda(6, 768, 0, tot,lim, "check_custom")
+    # a=compile_cuda(block_multiplyer, 768, 0, block_multiplyer*768,  1_000_000, "check_custom")
     print(a)
+    # exit()
     print(*run_file(a), sep="\n")

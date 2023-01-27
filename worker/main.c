@@ -11,6 +11,10 @@
     #define NUM_THREADS 12
 #endif
 
+#if !defined(THREAD_OVERLOAD)
+    #define THREAD_OVERLOAD 1
+#endif
+
 #if !defined(WORKER_OFFSET)
     #define WORKER_OFFSET 0
 #endif
@@ -27,7 +31,8 @@ typedef struct {
 
 void *cool_search_wraper(void *worker_id)
 {
-    cool_search(WORKER_OFFSET, TOTAL_WORKERS, (int)(llong)worker_id);
+    for(int id_overload=0;id_overload<THREAD_OVERLOAD;id_overload++)
+        cool_search(WORKER_OFFSET, TOTAL_WORKERS, ((int)(llong)worker_id) + id_overload*NUM_THREADS);
 
     return NULL;
 }

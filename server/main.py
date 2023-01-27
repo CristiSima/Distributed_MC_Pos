@@ -31,6 +31,9 @@ class Worker:
 
     @job_locked
     def get_cpu_work(self):
+        if not self.cpu_enabled:
+            return "DISABLED"
+
         if self.cpu_working:
             return "WORKING"
 
@@ -51,7 +54,9 @@ class Worker:
 
     @job_locked
     def get_gpu_work(self):
-        print("gpu work", self.gpu_working)
+        if not self.gpu_enabled:
+            return "DISABLED"
+
         if self.gpu_working:
             return "WORKING"
 
@@ -72,9 +77,20 @@ class Worker:
 
 job_lock=Lock()
 job={
-    "no_threads":20000,
+    "no_threads":46080,
     "threads_started":2,
+    "threads_finished":2,
+    "started":False,
+
+    "search_lim": 4_00_000,
+
+    # "check_func": None,
+    "check_func": [
+        ((0, 0, 0), 0),
+    ],
 }
+possitions=[]
+
 
 @worker.get('/debug')
 def worker_debug():
@@ -86,11 +102,17 @@ def worker_debug():
 @worker.get('/sync/<worker_id>')
 def worker_sync(worker_id):
     worker_id=UUID(worker_id)
-    print(worker_id)
     if worker_id not in workers:
         return {
 
         }, 404
+
+    if not job["started"]:
+        return {
+            **job,
+            "gpu_work": None,
+            "cpu_work": None,
+        }, 200
 
     worker=workers[worker_id]
 
@@ -101,25 +123,35 @@ def worker_sync(worker_id):
         gpu_work=worker.get_gpu_work()
         cpu_work=worker.get_cpu_work()
 
-    print(worker.cpu_working, worker.gpu_working)
-
     return {
+        **job,
         "gpu_work":gpu_work,
         "cpu_work":cpu_work,
     }
 
 @worker.post("/register")
 def worker_register():
-    print(request.json)
     worker=Worker(request.json["cpu"], request.json["gpu"])
     return {
         "result": "ok",
         "id": worker.id,
     }
 
-@worker.post("/submit/<worker_id>")
-def worker_submit(worker_id):
-    print(request.data)
+@worker.post("/submit/<worker_id>/<target>")
+def worker_submit(worker_id, target):
+    worker_id=UUID(worker_id)
+    worker=workers[worker_id]
+
+    if target=="cpu":
+        worker.cpu_working=False
+    else:
+        worker.gpu_working=False
+
+    for pos in request.json["possitions"]:
+        possitions.append(pos)
+
+    job["threads_finished"]+=request.json["threads_processed"]
+
     return {
         "result": "ok",
         "id": worker.id,
@@ -128,7 +160,11 @@ def worker_submit(worker_id):
 
 @control.get("/")
 def control_index():
-    return render_template("control.html.j2", workers=workers)
+    return render_template("control.html.j2",
+        workers=workers, job=job, possitions=possitions,
+        len=len, round=round,
+    )
+
 
 @control.get("/update_enabled/<worker_id>/gpu/<value>")
 def control_update_enabled_gpu(worker_id, value):
@@ -137,7 +173,6 @@ def control_update_enabled_gpu(worker_id, value):
         return redirect("/control")
     worker=workers[worker_id]
 
-    print(type(value))
     worker.gpu_enabled=value=="True"
 
     return redirect("/control")
@@ -149,10 +184,15 @@ def control_update_enabled_cpu(worker_id, value):
         return redirect("/control")
     worker=workers[worker_id]
 
-    print(type(value))
     worker.cpu_enabled=value=="True"
 
     return redirect("/control")
+
+@control.get("/start_job")
+def start_job():
+    job["started"]=True
+    return redirect("/control")
+
 
 '''
 
