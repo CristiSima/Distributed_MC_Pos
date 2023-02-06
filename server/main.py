@@ -1,6 +1,7 @@
 from flask import Flask, Blueprint, request, render_template, redirect
 from uuid import uuid1 as uuid, UUID
 from threading import Lock
+from copy import deepcopy
 import distribute
 app = Flask(__name__)
 
@@ -98,6 +99,7 @@ job={
         ((0, 0, 0), 0),
     ],
 }
+org_job=deepcopy(job)
 possitions=[]
 
 def distribute_job():
@@ -119,6 +121,8 @@ def distribute_job():
     if len(units) == 0:
         return
 
+    time_mofier=pow(job["search_lim"]/100_000, 2)
+
     best_score=min(distribute.get_scores(units))
     for i, unit in enumerate(units):
         if unit["score"]==best_score:
@@ -127,14 +131,17 @@ def distribute_job():
     # print(best_score)
     # print(conf)
     conf, best_time=distribute.complete_batch(conf, units)
+    best_time*=time_mofier
     # print(conf, best_time)
     # print(distribute.calc_proccessing_delta(units, conf))
     for scheduled_threads, unit, unit_duration in zip(conf, units, distribute.calc_proccessing_times(units, conf)):
+        unit_duration*=time_mofier
         unit["scheduled_threads"]=scheduled_threads
         unit["estimated_duration"]=round(unit_duration, 3)
 
     job["estimated_duration"]=round(best_time, 3)
     job["no_threads"]=sum(conf)
+
 
 @worker.get('/debug')
 def worker_debug():
@@ -242,6 +249,13 @@ def start_job():
     job["started"]=True
     return redirect("/control")
 
+@control.get("/reset")
+def reset_control():
+    global workers
+    global job
+    workers={}
+    job=deepcopy(org_job)
+    return redirect("/control")
 
 '''
 
