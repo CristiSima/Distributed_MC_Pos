@@ -33,11 +33,14 @@ class Worker:
 
         workers[self.id]=self
 
-        cpu_info["scheduled_threads"]=cpu_info["estimated_duration"]=None
-        gpu_info["scheduled_threads"]=gpu_info["estimated_duration"]=None
+        if cpu_info:
+            cpu_info["overload_factor"]=cpu_info["estimated_duration"]=None
+            cpu_info["id"]=self.id, "cpu"
 
-        cpu_info["id"]=self.id, "cpu"
-        gpu_info["id"]=self.id, "gpu"
+        if gpu_info:
+            gpu_info["overload_factor"]=gpu_info["estimated_duration"]=None
+            gpu_info["id"]=self.id, "gpu"
+
 
     @job_locked
     def get_cpu_work(self):
@@ -47,18 +50,20 @@ class Worker:
         if self.cpu_working:
             return "WORKING"
 
-        if not self.cpu_info["scheduled_threads"] or self.cpu_finished:
+        if not self.cpu_info["overload_factor"] or self.cpu_finished:
             return "JOB_DONE"
 
-        threads_no=self.cpu_info["scheduled_threads"]
+        overload_factor=self.cpu_info["overload_factor"]
+        local_threads=overload_factor*self.cpu_info["core_count"]
 
-        threads_offset=job["threads_started"]
-        job["threads_started"]=job["threads_started"]+threads_no
+        local_offset=job["threads_started"]
+        job["threads_started"]=job["threads_started"]+local_threads
 
         self.cpu_working=True
         return {
-            "threads_offset":threads_offset,
-            "threads":threads_no
+            "local_offset": local_offset,
+            "overload_factor": overload_factor,
+            "local_threads": local_threads
         }
 
     @job_locked
@@ -69,28 +74,30 @@ class Worker:
         if self.gpu_working:
             return "WORKING"
 
-        if not self.gpu_info["scheduled_threads"] or self.gpu_finished:
+        if not self.gpu_info["overload_factor"] or self.gpu_finished:
             return "JOB_DONE"
 
-        threads_no=self.gpu_info["scheduled_threads"]
+        overload_factor=self.gpu_info["overload_factor"]
+        local_threads=overload_factor*self.gpu_info["core_count"]
 
-        threads_offset=job["threads_started"]
-        job["threads_started"]=job["threads_started"]+threads_no
+        local_offset=job["threads_started"]
+        job["threads_started"]=job["threads_started"]+local_threads
 
         self.gpu_working=True
         return {
-            "threads_offset":threads_offset,
-            "threads":threads_no
+            "local_offset": local_offset,
+            "overload_factor": overload_factor,
+            "local_threads": local_threads
         }
 
 job_lock=Lock()
 job={
-    "no_threads": None,
+    "thread_count": None,
     "threads_started": 0,
     "threads_finished": 0,
     "started": False,
 
-    "search_lim": 2_00_000,
+    "search_lim": 1_00_000,
 
     "estimated_duration": None,
 
@@ -104,11 +111,11 @@ possitions=[]
 
 def distribute_job():
     for worker in workers.values():
-        worker.cpu_info["scheduled_threads"]=worker.gpu_info["scheduled_threads"]=None
+        worker.cpu_info["overload_factor"]=worker.gpu_info["overload_factor"]=None
         worker.cpu_info["estimated_duration"]=worker.gpu_info["estimated_duration"]=None
 
     job["estimated_duration"]=None
-    job["no_threads"]=None
+    job["thread_count"]=None
 
     units=[]
     for worker in workers.values():
@@ -124,23 +131,25 @@ def distribute_job():
     time_mofier=pow(job["search_lim"]/100_000, 2)
 
     best_score=min(distribute.get_scores(units))
+    overload_factors=[0]*len(units)
     for i, unit in enumerate(units):
         if unit["score"]==best_score:
-            conf=[0]*len(units)
-            conf[i]=unit["cores"]
+            overload_factors[i]=1
     # print(best_score)
     # print(conf)
-    conf, best_time=distribute.complete_batch(conf, units)
-    best_time*=time_mofier
-    # print(conf, best_time)
-    # print(distribute.calc_proccessing_delta(units, conf))
-    for scheduled_threads, unit, unit_duration in zip(conf, units, distribute.calc_proccessing_times(units, conf)):
-        unit_duration*=time_mofier
-        unit["scheduled_threads"]=scheduled_threads
-        unit["estimated_duration"]=round(unit_duration, 3)
+    overload_factors, work_time=distribute.complete_batch(units, overload_factors)
 
-    job["estimated_duration"]=round(best_time, 3)
-    job["no_threads"]=sum(conf)
+    work_time*=time_mofier
+    estimated_durations=distribute.calc_proccessing_times(units, overload_factors)
+    job["estimated_duration"]=round(work_time, 3)
+
+    for overload_factor, unit, estimated_duration in zip(overload_factors, units, estimated_durations):
+        estimated_duration*=time_mofier
+        unit["overload_factor"]=overload_factor
+        unit["estimated_duration"]=round(estimated_duration, 3)
+
+    thread_distribution=distribute.get_thread_distribution(units, overload_factors)
+    job["thread_count"]=sum(thread_distribution)
 
 
 @worker.get('/debug')
@@ -167,17 +176,13 @@ def worker_sync(worker_id):
 
     worker=workers[worker_id]
 
-    if worker.cpu_info["score"]<worker.gpu_info["score"]:
-        cpu_work=worker.get_cpu_work()
-        gpu_work=worker.get_gpu_work()
-    else:
-        gpu_work=worker.get_gpu_work()
-        cpu_work=worker.get_cpu_work()
+    cpu_work=worker.get_cpu_work()
+    gpu_work=worker.get_gpu_work()
 
     return {
         **job,
-        "gpu_work":gpu_work,
-        "cpu_work":cpu_work,
+        "gpu_work": gpu_work,
+        "cpu_work": cpu_work,
     }
 
 @worker.post("/register")
@@ -191,6 +196,13 @@ def worker_register():
 @worker.post("/submit/<worker_id>/<target>")
 def worker_submit(worker_id, target):
     worker_id=UUID(worker_id)
+
+    for pos in request.json["possitions"]:
+        possitions.append(pos)
+
+    if worker_id not in workers:
+        return {"error":"Unknown worker"}, 404
+
     worker=workers[worker_id]
 
     if target=="cpu":
@@ -221,6 +233,13 @@ def control_index():
         len=len, round=round,
     )
 
+@control.get("/possitions")
+def control_possitions():
+    distribute_job()
+    return render_template("possitions.html.j2",
+        workers=workers, job=job, possitions=possitions,
+        len=len, round=round,
+    )
 
 @control.get("/update_enabled/<worker_id>/gpu/<value>")
 def control_update_enabled_gpu(worker_id, value):

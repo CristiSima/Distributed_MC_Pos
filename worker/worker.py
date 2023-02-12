@@ -8,6 +8,9 @@ import worker_lib
 
 def roundup(nr):    return (int(nr) if nr == round(nr) else int(nr)+1)
 
+'''
+Standalone GET and POST implementations for json communication
+'''
 def get(url, headers=None):
     headers = headers or {}
     headers = {"Accept": "application/json", **headers}
@@ -56,6 +59,8 @@ def post(url, json_payload=None, headers=None):
 
 with open("worker_info.json") as f:
     worker_info=json.load(f)
+cpu_info=worker_info["cpu"]
+gpu_info=worker_info["gpu"]
 
 current_id=None
 BASE_URL="http://192.168.0.200:5000/worker/"
@@ -86,10 +91,10 @@ def cpu_process(job):
 
     print("cpu", cpu_work)
     exec_name=worker_lib.compile_c(
-        num_threads=worker_info["cpu"]["cores"],
-        thread_overload=cpu_work["threads"]//worker_info["cpu"]["cores"],
-        worker_offset=cpu_work["threads_offset"],
-        total_workers=job["no_threads"],
+        core_count=cpu_info["core_count"],
+        overload_factor=cpu_work["overload_factor"],
+        local_offset=cpu_work["local_offset"],
+        thread_count=job["thread_count"],
         world_limit=job["search_lim"],
         check_func=None
     )
@@ -101,7 +106,7 @@ def cpu_process(job):
     print("possitions:", possitions)
     post(BASE_URL+f"submit/{current_id}/cpu", {
         "possitions": possitions,
-        "threads_processed": cpu_work["threads"]
+        "threads_processed": cpu_work["local_threads"]
     })
 cpu_queue, cpu_thread=create_processor(cpu_process)
 cpu_thread.start()
@@ -112,13 +117,12 @@ def gpu_process(job):
         return
 
     print("gpu", gpu_work)
-    print(gpu_work["threads"]/worker_info["gpu"]["block_dim"])
     exec_name=worker_lib.compile_cuda(
-        num_blocks=worker_info["gpu"]["cores"]//worker_info["gpu"]["block_dim"],
-        num_threads=worker_info["gpu"]["block_dim"],
-        thread_overload=gpu_work["threads"]//worker_info["gpu"]["cores"],
-        worker_offset=gpu_work["threads_offset"],
-        total_workers=job["no_threads"],
+        block_count=gpu_info["block_count"],
+        core_count=gpu_info["block_size"],
+        overload_factor=gpu_work["overload_factor"],
+        local_offset=gpu_work["local_offset"],
+        thread_count=job["thread_count"],
         world_limit=job["search_lim"],
         check_func=None
     )
@@ -130,7 +134,7 @@ def gpu_process(job):
     print("possitions:", possitions)
     post(BASE_URL+f"submit/{current_id}/gpu", {
         "possitions": possitions,
-        "threads_processed": gpu_work["threads"]
+        "threads_processed": gpu_work["local_threads"]
     })
 gpu_queue, gpu_thread=create_processor(gpu_process)
 gpu_thread.start()

@@ -7,27 +7,27 @@ cc="gcc"
 def my_system(args):
     sp.Popen(args, shell=True).wait()
 
-def compile_c(num_threads, thread_overload, worker_offset, total_workers, world_limit, check_func=None):
-    exec_name=f"compiled/main_c_{num_threads}_{worker_offset}_{total_workers}"
+def compile_c(core_count, overload_factor, local_offset, thread_count, world_limit, check_func=None):
+    exec_name=f"compiled/main_c_{core_count}_{local_offset}_{thread_count}"
     my_system(f"{cc}  main.c -O2 -o {exec_name} "
-        f" -D NUM_THREADS={num_threads} "
-        f" -D THREAD_OVERLOAD={thread_overload} "
-        f" -D WORKER_OFFSET={worker_offset} "
-        f" -D TOTAL_WORKERS={total_workers} "
+        f" -D CORE_COUNT={core_count} "
+        f" -D OVERLOAD_FACTOR={overload_factor} "
+        f" -D LOCAL_OFFSET={local_offset} "
+        f" -D THREAD_COUNT={thread_count} "
         f" -D WORLD_LIMIT={world_limit} "+
         (f" -D check_func={check_func} " if check_func else "")
     )
 
     return f"{exec_name}.exe"
 
-def compile_cuda(num_blocks, num_threads, thread_overload, worker_offset, total_workers, world_limit, check_func=None):
-    exec_name=f"compiled/main_cuda_{num_blocks}_{num_threads}_{worker_offset}_{total_workers}"
+def compile_cuda(block_count, core_count, overload_factor, local_offset, thread_count, world_limit, check_func=None):
+    exec_name=f"compiled/main_cuda_{block_count}_{core_count}_{local_offset}_{thread_count}"
     my_system(f"nvcc main.cu -o {exec_name} "
-        f" -D NUM_BLOCKS={num_blocks} "
-        f" -D NUM_THREADS={num_threads} "
-        f" -D THREAD_OVERLOAD={thread_overload} "
-        f" -D WORKER_OFFSET={worker_offset} "
-        f" -D TOTAL_WORKERS={total_workers} "
+        f" -D BLOCK_COUNT={block_count} "
+        f" -D CORE_COUNT={core_count} "
+        f" -D OVERLOAD_FACTOR={overload_factor} "
+        f" -D LOCAL_OFFSET={local_offset} "
+        f" -D THREAD_COUNT={thread_count} "
         f" -D WORLD_LIMIT={world_limit} "+
         (f" -D check_func={check_func} " if check_func else "")
     )
@@ -44,11 +44,11 @@ def run_file(file_name):
     # help(proc.stdout)
     return (run_time, proc.stdout.read().decode())
 
-def bf_GPU_max_block_multiplyer(num_threads, world_limit):
-    duration=run_file(compile_cuda(1, num_threads, 0, num_threads,  world_limit))[0]
+def bf_GPU_max_block_multiplyer(core_count, world_limit):
+    duration=run_file(compile_cuda(1, core_count, 1, 0, core_count,  world_limit))[0]
     print("Base duration:", duration)
     for i in range(2, 100):
-        new_duration=run_file(compile_cuda(i, num_threads, 0, i*num_threads,  world_limit))[0]
+        new_duration=run_file(compile_cuda(i, core_count, 1, 0, i*core_count,  world_limit))[0]
         if(new_duration>duration):
             break
         duration=new_duration
@@ -89,13 +89,13 @@ if __name__ == "__main__":
             maker.add((i, 0, j), 0)
     maker.save()
 
-    # bf_GPU_max_block_multiplyer(768, 60_000)
+    # bf_GPU_max_block_multiplyer(768, 100_000)
     # exit()
     block_multiplyer=6
     c_overload=70
     cuda_overload=1
     # a=compile_c(12, c_overload, 0, 12*c_overload, 100_000, "check_custom")
-    tot,lim=1200, 100_000
+    tot,lim=120, 100_000
     # a=compile_c(12, 1, 0, tot, lim, "check_custom")
     # a=compile_cuda(6, 768, 0, 6*768,  60_000, "check_custom")
     # a=compile_cuda(block_multiplyer, 768, 0, block_multiplyer*768,  60_000, "check_custom")

@@ -7,20 +7,20 @@
 
 #include "base.h"
 
-#if !defined(NUM_THREADS)
-    #define NUM_THREADS 12
+#if !defined(CORE_COUNT)
+    #define CORE_COUNT 12
 #endif
 
-#if !defined(THREAD_OVERLOAD)
-    #define THREAD_OVERLOAD 1
+#if !defined(OVERLOAD_FACTOR)
+    #define OVERLOAD_FACTOR 1
 #endif
 
-#if !defined(WORKER_OFFSET)
-    #define WORKER_OFFSET 0
+#if !defined(LOCAL_OFFSET)
+    #define LOCAL_OFFSET 0
 #endif
 
-#if !defined(TOTAL_WORKERS)
-    #define TOTAL_WORKERS NUM_THREADS
+#if !defined(THREAD_COUNT)
+    #define THREAD_COUNT CORE_COUNT
 #endif
 
 typedef struct {
@@ -29,31 +29,31 @@ typedef struct {
     int worker_id;
 } worker_info;
 
-void *cool_search_wraper(void *worker_id)
+void *search_overloader(void *worker_id)
 {
-    for(int id_overload=0;id_overload<THREAD_OVERLOAD;id_overload++)
-        cool_search(WORKER_OFFSET, TOTAL_WORKERS, ((int)(llong)worker_id) + id_overload*NUM_THREADS);
+    for(int id_overload=0;id_overload<OVERLOAD_FACTOR;id_overload++)
+        search_function(LOCAL_OFFSET, THREAD_COUNT, ((int)(llong)worker_id) + id_overload*CORE_COUNT);
 
     return NULL;
 }
 
 
 int main(void) {
-    printf("CPU[%3d]     with limit %8d\n", NUM_THREADS, WORLD_LIMIT);
+    printf("CPU[%3d]     with limit %8d\n", CORE_COUNT, WORLD_LIMIT);
 
 
-    pthread_t threads[NUM_THREADS];
-    worker_info args[NUM_THREADS];
+    pthread_t threads[CORE_COUNT];
+    worker_info args[CORE_COUNT];
 
-    for (int id = 0; id < NUM_THREADS; id++) {
+    for (int id = 0; id < CORE_COUNT; id++) {
             // args[id].worker_offset=0;
-            // args[id].total_workers=NUM_THREADS;
+            // args[id].total_workers=CORE_COUNT;
             // args[id].worker_id=id;
 
-            pthread_create(&threads[id], NULL, (void* (*)(void*))cool_search_wraper, (void *)(llong)id);
+            pthread_create(&threads[id], NULL, (void* (*)(void*))search_overloader, (void *)(llong)id);
     }
     // cool_search(0, 1, 0);
-    for (int id = 0; id < NUM_THREADS; id++)
+    for (int id = 0; id < CORE_COUNT; id++)
         pthread_join(threads[id], NULL);
 return 0;
 }

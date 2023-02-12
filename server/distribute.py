@@ -8,7 +8,7 @@ def mul(*args): return reduce(mul_org, args, 1)
 def roundup(nr): return (int(nr) if nr == round(nr) else int(nr)+1)
 
 def proc(target):
-    target["speed"]=int(round(target["cores"]*target["score"]))
+    target["speed"]=int(round(target["core_count"]*target["score"]))
     target["speed"]=target["score"]
 
 # proc(cpu)
@@ -37,117 +37,117 @@ def single_balance(cpu, gpu):
 
     exit()
 
-    cores=list(map(round, map(mul, weight, [cpu["cores"], gpu["cores"]])))
+    thread_counts=list(map(round, map(mul, weight, [cpu["core_count"], gpu["core_count"]])))
 
-    print(cores)
+    print(thread_counts)
 
-    return cores
+    return thread_counts
 
 
 def get_field(targets, field_name):
     return [target[field_name] for target in targets]
 
-def get_cores(targets): return get_field(targets, "cores")
+def get_core_counts(targets): return get_field(targets, "core_count")
 def get_scores(targets): return get_field(targets, "score")
 
+def get_thread_distribution(units, overload_factors):
+    return list(map(mul, get_core_counts(units), overload_factors))
 
-
-def calc_proccessing_times(units, threads):
+def calc_proccessing_times(units, overload_factors):
     '''
     aproximates the system execution time (start -> last finish)
 
     a batch is a set of up to <cores> threads, the execution time of a batch is independent of the number of threads in it
     '''
-    total_threads=sum(threads)
+    thread_distribution=get_thread_distribution(units, overload_factors)
+    thread_count=sum(thread_distribution)
 
-    batches=list(map(roundup,
-        map(itruediv,
-            threads, get_cores(units)
-        )
-    ))
-    # print(batches)
     times=list(map(mul,
-        batches, get_scores(units), get_cores(units), [1/total_threads,]*len(batches)
+        thread_distribution, get_scores(units), [1/thread_count,]*len(overload_factors)
     ))
     # print(times)
     return times
 
-def calc_proccessing_duration(units, threads):
-    return max(calc_proccessing_times(units, threads))
+def calc_proccessing_duration(units, overload_factors):
+    return max(calc_proccessing_times(units, overload_factors))
 
-def calc_proccessing_delta(units, threads):
-    times=calc_proccessing_times(units, threads)
+def calc_proccessing_delta(units, overload_factors):
+    times=calc_proccessing_times(units, overload_factors)
     return max(times)-min(times)
 
-def add_best_batch(threads, units, base_time=None):
+def add_best_batch(units, overload_factors, base_time=None):
     '''
-    tries to generate a better(lower system execution time) configuration(distribution of threads)
+    tries to generate a better(lower system execution time) configuration(distribution of threads/overload_factors)
     '''
     if not base_time:
-        base_time=calc_proccessing_duration(units, threads)
+        base_time=calc_proccessing_duration(units, overload_factors)
 
     best_time=base_time
 
-    for idx, batch_size in enumerate(get_cores(units)):
-        next_time=calc_proccessing_duration(units, conf_add(threads, idx, batch_size))
+    for idx, batch_size in enumerate(get_core_counts(units)):
+        next_time=calc_proccessing_duration(units, conf_add(overload_factors, idx, 1))
         if best_time > next_time:
             best_time = next_time
-            next_threads=conf_add(threads, idx, batch_size)
+            next_overload_factors=conf_add(overload_factors, idx, 1)
 
-    if base_time!=best_time:
-        return True, next_threads, best_time
+    if base_time>best_time:
+        return True, next_overload_factors, best_time
 
-    return False, threads, best_time
+    return False, overload_factors, base_time
 
-def complete_batch(conf, units):
+def complete_batch(units, overload_factors):
     '''
-    a greedy aproach to generate the best (lower system execution time) configuration (distribution of threads)
+    a greedy aproach to generate the best (lower system execution time) configuration (distribution of threads/overload_factors)
     '''
     best_time=None
 
     while True:
-        found, conf, best_time=add_best_batch(conf, units, best_time)
+        found, overload_factors, best_time=add_best_batch(units, overload_factors, best_time)
         if not found:
             break
 
-    return conf, best_time
+    return overload_factors, best_time
 
 def conf_add(conf, target_idx, val):
     return [e if i != target_idx else e+val for i, e in enumerate(conf)]
 
 def test():
     cpu= {
-        "cores": 12,
+        "core_count": 12,
         "score": 11.093
     }
 
     gpu= {
-        "cores": 4608,
+        "core_count": 4608,
         "score": 2.04
     }
 
     units=[cpu, gpu, gpu]
-    conf=[0, 4608, 4608]
+    # conf=[0, 4608, 4608]
+    overload_factors=[0, 1, 1]
 
     units=[cpu, cpu, gpu]
-    conf=[0, 0, 4608]
+    # conf=[0, 0, 4608]
+    overload_factors=[0, 0, 1]
     # conf=[0, 4608, 0]
+    overload_factors=[0, 1, 0]
+
 
     units=[cpu, gpu]
-    conf=[0, 4608]
+    # conf=[0, 4608]
+    overload_factors=[0, 1]
 
     print("cpu", cpu)
     print("gpu", gpu)
 
-    base_time=calc_proccessing_duration(units, conf)
+    base_time=calc_proccessing_duration(units, overload_factors)
 
     print(base_time)
-    print(*add_best_batch(conf, units))
+    print(*add_best_batch(units, overload_factors))
 
 
-
-    print(*complete_batch(conf, units))
-    print(calc_proccessing_delta(units, complete_batch(conf, units)[0]))
+    print(*complete_batch(units, overload_factors))
+    print(calc_proccessing_delta(units, complete_batch(units, overload_factors)[0]))
 
 
 if __name__ == "__main__":
@@ -166,7 +166,7 @@ speed_system= speed_thread * nr_threads
 
 
 BENCHMARK:
-    t = speed_thread * nr_threads * ( W / cores )
+    t = speed_thread * nr_threads * ( W / core_count )
       = speed_thread * W
 
     speed_thread    nr_threads      WORK
@@ -195,7 +195,7 @@ k2= 4
 
 W1 = 40 W2
 
-Wn = W * (threads_n / total_threads)
+Wn = W * (threads_n / thread_count)
 
 
 pp nr_threads

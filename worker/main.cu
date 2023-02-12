@@ -7,24 +7,24 @@
 
 #include "base.h"
 
-#if !defined(NUM_BLOCKS)
-    #define NUM_BLOCKS 6
+#if !defined(BLOCK_COUNT)
+    #define BLOCK_COUNT 6
 #endif
 
-#if !defined(NUM_THREADS)
-    #define NUM_THREADS 768
+#if !defined(CORE_COUNT)
+    #define CORE_COUNT 768
 #endif
 
-#if !defined(THREAD_OVERLOAD)
-    #define THREAD_OVERLOAD 1
+#if !defined(OVERLOAD_FACTOR)
+    #define OVERLOAD_FACTOR 1
 #endif
 
-#if !defined(WORKER_OFFSET)
-    #define WORKER_OFFSET 0
+#if !defined(LOCAL_OFFSET)
+    #define LOCAL_OFFSET 0
 #endif
 
-#if !defined(TOTAL_WORKERS)
-    #define TOTAL_WORKERS (NUM_THREADS*NUM_BLOCKS)
+#if !defined(THREAD_COUNT)
+    #define THREAD_COUNT (CORE_COUNT*BLOCK_COUNT)
 #endif
 
 __global__ void print_from_gpu(void) {
@@ -44,21 +44,21 @@ __global__ void print_from_gpu(void) {
 }
 
 
-__global__ void cool_search_wraper()
+__global__ void search_overloader()
 {
-    for(int id_overload=0;id_overload<THREAD_OVERLOAD;id_overload++)
-        cool_search(WORKER_OFFSET, TOTAL_WORKERS, threadIdx.x+blockIdx.x*blockDim.x+ id_overload*(blockDim.x*gridDim.x));
+    for(int id_overload=0; id_overload<OVERLOAD_FACTOR; id_overload++)
+        search_function(LOCAL_OFFSET, THREAD_COUNT, threadIdx.x+blockIdx.x*blockDim.x+ id_overload*(blockDim.x*gridDim.x));
 }
 
 
 
 int main(void) {
-	printf("GPU[%3d, %3d] with limit %8d\n", NUM_BLOCKS, NUM_THREADS, WORLD_LIMIT);
+	printf("GPU[%3d, %3d] with limit %8d\n", BLOCK_COUNT, CORE_COUNT, WORLD_LIMIT);
     fflush(stdout);
 
-    #define cool_search_standalone(workers) cool_search_wraper<<<1,workers>>>(0, workers);
-    #define cool_search_test(offset, total_workers) cool_search_wraper<<<1,1>>>(offset, total_workers);
-    cool_search_wraper<<<NUM_BLOCKS, NUM_THREADS>>>();
+    #define cool_search_standalone(workers) search_overloader<<<1,workers>>>(0, workers);
+    #define cool_search_test(offset, total_workers) search_overloader<<<1,1>>>(offset, total_workers);
+    search_overloader<<<BLOCK_COUNT, CORE_COUNT>>>();
 
     cudaError_t cuda_error=cudaGetLastError();
     if(cuda_error!=cudaSuccess)
@@ -67,7 +67,7 @@ int main(void) {
     // cool_search_standalone(768);
     // cool_search_standalone(1);
     // cool_search_test(1, 2);
-    // cool_search_wraper<<<1,768>>>(0, 768);
+    // search_overloader<<<1,768>>>(0, 768);
 	// print_from_gpu<<<1,768>>>();
 	// print_from_gpu<<<1,768>>>();
 	// print_from_gpu<<<1,400>>>();

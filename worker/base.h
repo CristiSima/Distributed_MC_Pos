@@ -183,4 +183,42 @@ MODIFIER void cool_search(int worker_offset, int total_workers, int workerId) {
 	    printf("Thread %3d found: %d\n", workerId, sum);
 }
 
+MODIFIER void basic_search(int worker_offset, int total_workers, int workerId) {
+    int sum=0;
+    int y=-61;
+
+    for (int x = workerId+1+worker_offset; x < WORLD_LIMIT ; x+=total_workers)
+    for (int z = 1; z < WORLD_LIMIT ; z++)
+        {
+            if(check_func(x, y, z))
+            {
+                printf("FOUND @ %d %d %d\n", x, y, z);
+                sum++;
+            }
+            if(check_func(-x, y, z))
+            {
+                printf("FOUND @ %d %d %d\n", -x, y, z);
+                sum++;
+            }
+            if(check_func(-x, y, -z))
+            {
+                printf("FOUND @ %d %d %d\n", -x, y, -z);
+                sum++;
+            }
+            if(check_func(x, y, -z))
+            {
+                printf("FOUND @ %d %d %d\n", x, y, -z);
+                sum++;
+            }
+        }
+
+
+    if(sum!=0)
+	    printf("Thread %3d found: %d\n", workerId, sum);
+}
+
+#if !defined(search_function)
+    #define search_function basic_search
+#endif
+
 #include "custom.h"

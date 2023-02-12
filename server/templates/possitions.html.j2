@@ -1,0 +1,53 @@
+<head>
+    <title>Possitions</title>
+</head>
+
+<script type="text/javascript">
+
+var to_clipboard;
+
+function tp_to_pos(pos) {
+    return `/tp @p ${pos[0]} ${pos[1]} ${pos[2]}`
+}
+</script>
+
+<body>
+    <div id="info"></div>
+
+    Possitions
+    <table>
+        <thead>
+            <th>X</th>
+            <th>Y</th>
+            <th>Z</th>
+        </thead>
+        <tbody>
+            {% for possition in possitions %}
+            <tr onclick="to_clipboard(tp_to_pos({{possition}}))">
+                <td>{{possition[0]}}</td>
+                <td>{{possition[1]}}</td>
+                <td>{{possition[2]}}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+
+<script type="text/javascript">
+if (navigator.clipboard==undefined) {
+    document.body.children[0].appendChild(new Text(
+        "Coppy to clipboard NOT available "
+    ));
+    document.body.children[0].appendChild(document.createElement("br"));
+    document.body.children[0].appendChild(new Text(
+        "Alerts will be used"
+    ));
+    document.body.children[0].appendChild(document.createElement("br"));
+    document.body.children[0].appendChild(document.createElement("br"));
+
+    to_clipboard=alert;
+}
+else
+    to_clipboard=function(text) {navigator.clipboard.writeText(text)};
+
+</script>
