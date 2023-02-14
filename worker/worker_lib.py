@@ -7,29 +7,59 @@ cc="gcc"
 def my_system(args):
     sp.Popen(args, shell=True).wait()
 
-def compile_c(core_count, overload_factor, local_offset, thread_count, world_limit, check_func=None):
+def compile_c(core_count, overload_factor, local_offset, thread_count, world_limit,
+        check_func=None, search_function=None, y_level=None):
     exec_name=f"compiled/main_c_{core_count}_{local_offset}_{thread_count}"
+
+    if y_level:
+        if type(y_level) is int:
+            y_level=f" -D MIN_Y={y_level} -D MAX_Y={y_level} "
+        elif type(y_level) is list:
+            y_level=f" -D MIN_Y={y_level[0]} -D MAX_Y={y_level[1]} "
+        else:
+            print("WRONG y_level", y_level)
+            return
+    else:
+        y_level=""
+
     my_system(f"{cc}  main.c -O2 -o {exec_name} "
         f" -D CORE_COUNT={core_count} "
         f" -D OVERLOAD_FACTOR={overload_factor} "
         f" -D LOCAL_OFFSET={local_offset} "
         f" -D THREAD_COUNT={thread_count} "
         f" -D WORLD_LIMIT={world_limit} "+
-        (f" -D check_func={check_func} " if check_func else "")
+        y_level+
+        (f" -D check_func={check_func} " if check_func else "")+
+        (f" -D search_function={search_function} " if search_function else "")
     )
 
     return f"{exec_name}.exe"
 
-def compile_cuda(block_count, core_count, overload_factor, local_offset, thread_count, world_limit, check_func=None):
+def compile_cuda(block_count, core_count, overload_factor, local_offset, thread_count, world_limit,
+        check_func=None, search_function=None, y_level=None):
     exec_name=f"compiled/main_cuda_{block_count}_{core_count}_{local_offset}_{thread_count}"
-    my_system(f"nvcc main.cu -o {exec_name} "
+
+    if y_level:
+        if type(y_level) is int:
+            y_level=f" -D MIN_Y={y_level} -D MAX_Y={y_level} "
+        elif type(y_level) is list:
+            y_level=f" -D MIN_Y={y_level[0]} -D MAX_Y={y_level[1]} "
+        else:
+            print("WRONG y_level", y_level)
+            return
+    else:
+        y_level=""
+
+    my_system(f"nvcc main.cu -o {exec_name} -g "
         f" -D BLOCK_COUNT={block_count} "
         f" -D CORE_COUNT={core_count} "
         f" -D OVERLOAD_FACTOR={overload_factor} "
         f" -D LOCAL_OFFSET={local_offset} "
         f" -D THREAD_COUNT={thread_count} "
         f" -D WORLD_LIMIT={world_limit} "+
-        (f" -D check_func={check_func} " if check_func else "")
+        y_level+
+        (f" -D check_func={check_func} " if check_func else "")+
+        (f" -D search_function={search_function} " if search_function else "")
     )
 
     return f"{exec_name}.exe"
@@ -92,14 +122,16 @@ if __name__ == "__main__":
     # bf_GPU_max_block_multiplyer(768, 100_000)
     # exit()
     block_multiplyer=6
-    c_overload=70
+    c_overload=1
     cuda_overload=1
+    search_function=None
+    # search_function="basic_search"
     # a=compile_c(12, c_overload, 0, 12*c_overload, 100_000, "check_custom")
     tot,lim=120, 100_000
     # a=compile_c(12, 1, 0, tot, lim, "check_custom")
     # a=compile_cuda(6, 768, 0, 6*768,  60_000, "check_custom")
     # a=compile_cuda(block_multiplyer, 768, 0, block_multiplyer*768,  60_000, "check_custom")
-    a=compile_cuda(block_multiplyer, 767, cuda_overload, 0, block_multiplyer*767*cuda_overload,  100_000, "check_custom")
+    a=compile_cuda(block_multiplyer, 767, cuda_overload, 0, block_multiplyer*767*cuda_overload,  100_000, "check_custom", search_function)
     # a=compile_cuda(6, 768, 0, tot,lim, "check_custom")
     # a=compile_cuda(block_multiplyer, 768, 0, block_multiplyer*768,  1_000_000, "check_custom")
     print(a)

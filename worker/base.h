@@ -63,12 +63,13 @@ MODIFIER int check_pos(int x, int y, int z)
             return 0;
     return 1;
 }
-
-#define length 4
+#if !defined(SQUARE_CHECK_LENGTH)
+    #define SQUARE_CHECK_LENGTH 4
+#endif
 MODIFIER int CHECK_NO_INLINE check_square(int x, int y, int z)
 {
 
-    for(int i=0;i<length;i++) for(int j=0;j<length;j++)
+    for(int i=0;i<SQUARE_CHECK_LENGTH;i++) for(int j=0;j<SQUARE_CHECK_LENGTH;j++)
         if(0!=getQuads_inline(x+i, y, z+j))
             return 0;
 
@@ -81,7 +82,7 @@ MODIFIER int CHECK_NO_INLINE check_square(int x, int y, int z)
 MODIFIER int check_rect(int x, int y, int z)
 {
 
-    for(int i=0;i<length;i++) for(int j=0;j<rect_width;j++)
+    for(int i=0;i<rect_length;i++) for(int j=0;j<rect_width;j++)
         if(0!=getQuads_inline(x+i, y, z+j))
             return 0;
 
@@ -100,9 +101,14 @@ MODIFIER int check_custom(int x, int y, int z);
 
 
 #if !defined(check_func)
-    // #define check_func check_pos
     #define check_func check_square
-    // #define check_func check_rect
+#endif
+
+#if !defined(MIN_Y)
+    #define MIN_Y -61
+#endif
+#if !defined(MAX_Y)
+    #define MAX_Y -61
 #endif
 
 MODIFIER void cool_search(int worker_offset, int total_workers, int workerId) {
@@ -185,10 +191,10 @@ MODIFIER void cool_search(int worker_offset, int total_workers, int workerId) {
 
 MODIFIER void basic_search(int worker_offset, int total_workers, int workerId) {
     int sum=0;
-    int y=-61;
 
     for (int x = workerId+1+worker_offset; x < WORLD_LIMIT ; x+=total_workers)
     for (int z = 1; z < WORLD_LIMIT ; z++)
+        for(int y=MIN_Y; y<=MAX_Y;y++)
         {
             if(check_func(x, y, z))
             {

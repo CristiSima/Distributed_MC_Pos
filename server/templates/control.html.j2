@@ -14,11 +14,7 @@
     <br>
 
 
-    {% if job["started"] %}
-        RUNNING
-    {% else %}
-        WAITING
-    {% endif %}
+    {{ job["state"] }}
 
     <br>
     <br>
@@ -120,6 +116,12 @@
     <br>
 
     <a href="/control/reset">RESET</a>
+
+
+    <br>
+    <br>
+
+    <a href="/control/pattern">PATTERN CONFIG</a>
 
 
     <script type="text/javascript">

@@ -96,7 +96,8 @@ def cpu_process(job):
         local_offset=cpu_work["local_offset"],
         thread_count=job["thread_count"],
         world_limit=job["search_lim"],
-        check_func=None
+        check_func=job["check_func"],
+        y_level=job["y_level"],
     )
     print(exec_name)
     duration, output=worker_lib.run_file(exec_name)
@@ -124,7 +125,8 @@ def gpu_process(job):
         local_offset=gpu_work["local_offset"],
         thread_count=job["thread_count"],
         world_limit=job["search_lim"],
-        check_func=None
+        check_func=job["check_func"],
+        y_level=job["y_level"],
     )
     print(exec_name)
     duration, output=worker_lib.run_file(exec_name)
@@ -148,6 +150,13 @@ while True:
     if resp_code==404:
         get_id()
     else:
+        if resp["start_flag"] and resp["check_func"]=="check_custom":
+            # update custom check when a new job starts and it's used
+            maker=worker_lib.check_maker()
+            for block_info in resp["check_pattern"]:
+                maker.add(*block_info)
+            maker.save()
+
         cpu_queue.put(resp)
         gpu_queue.put(resp)
 

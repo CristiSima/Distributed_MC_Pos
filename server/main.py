@@ -95,15 +95,16 @@ job={
     "thread_count": None,
     "threads_started": 0,
     "threads_finished": 0,
-    "started": False,
+    "state": "WAITING",
 
     "search_lim": 1_00_000,
+    "y_level": -61,
 
     "estimated_duration": None,
 
-    # "check_func": None,
-    "check_func": [
-        ((0, 0, 0), 0),
+    "check_func": None,
+    "check_pattern": [
+        [[0, 0, 0], 0],
     ],
 }
 org_job=deepcopy(job)
@@ -167,11 +168,12 @@ def worker_sync(worker_id):
 
         }, 404
 
-    if not job["started"]:
+    if job["state"]!="STARTED":
         return {
             **job,
             "gpu_work": None,
             "cpu_work": None,
+            "start_flag": False,
         }, 200
 
     worker=workers[worker_id]
@@ -179,10 +181,13 @@ def worker_sync(worker_id):
     cpu_work=worker.get_cpu_work()
     gpu_work=worker.get_gpu_work()
 
+    start_flag=isinstance(cpu_work, dict) or isinstance(gpu_work, dict)
+
     return {
         **job,
         "gpu_work": gpu_work,
         "cpu_work": cpu_work,
+        "start_flag": start_flag,
     }
 
 @worker.post("/register")
@@ -218,6 +223,9 @@ def worker_submit(worker_id, target):
 
     job["threads_finished"]+=request.json["threads_processed"]
 
+    if job["threads_finished"]==job["thread_count"]:
+        job["state"]="FINISHED"
+
 
     return {
         "result": "ok",
@@ -239,6 +247,14 @@ def control_possitions():
     return render_template("possitions.html.j2",
         workers=workers, job=job, possitions=possitions,
         len=len, round=round,
+    )
+
+@control.get("/pattern")
+def control_pattern_intern():
+    distribute_job()
+    return render_template("pattern.html.j2",
+        workers=workers, job=job, possitions=possitions,
+        len=len, round=round, enumerate=enumerate, str=str, type=type, int=int,
     )
 
 @control.get("/update_enabled/<worker_id>/gpu/<value>")
@@ -265,7 +281,12 @@ def control_update_enabled_cpu(worker_id, value):
 
 @control.get("/start_job")
 def start_job():
-    job["started"]=True
+    job["state"]="STARTED"
+    job["threads_finished"]=0
+    job["threads_started"]=0
+    for worker in workers.values():
+        worker.cpu_finished=False
+        worker.gpu_finished=False
     return redirect("/control")
 
 @control.get("/reset")
@@ -274,7 +295,42 @@ def reset_control():
     global job
     workers={}
     job=deepcopy(org_job)
+
     return redirect("/control")
+
+@control.post("/pattern_input")
+def update_pattern_input():
+    job["check_pattern"]=request.json
+
+    return "OK"
+
+@control.get("/pattern_input/reset")
+def reset_pattern():
+    job["check_pattern"]=[[[0, 0, 0], 0]]
+
+    return redirect("/control/pattern")
+
+@control.get("/pattern_select/")
+@control.get("/pattern_select/<func_name>")
+def select_pattern_func(func_name=None):
+    job["check_func"]=func_name
+
+    return redirect("/control/pattern")
+
+@control.post("/y_level")
+def control_y_level():
+
+    if "target" in request.form:
+        job["y_level"]=int(request.form["target_y"])
+
+    if "range" in request.form:
+        job["y_level"]=[
+            int(request.form["min_y"]),
+            int(request.form["max_y"]),
+        ]
+
+    return redirect("/control/pattern")
+
 
 '''
 

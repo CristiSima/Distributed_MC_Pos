@@ -1,0 +1,165 @@
+<head>
+    <title>Pattern Config</title>
+</head>
+<script type="text/javascript">
+    function check_block_info(block_info) {
+        // check shape
+        if(!(block_info instanceof Array && block_info.length==2))
+            return false;
+        if(!(block_info[0] instanceof Array && block_info[0].length==3))
+            return false;
+
+        // check data types
+        if(!(   Number.isInteger(block_info[0][0]) &&
+                Number.isInteger(block_info[0][1]) &&
+                Number.isInteger(block_info[0][2]) &&
+                Number.isInteger(block_info[1]) ))
+            return false;
+
+        // check rotation value
+        if(!(0<=block_info[1] && block_info[1]<=3))
+            return false;
+
+        return true;
+    }
+
+    function submit()
+    {
+        let text_box=document.querySelector("#pattern")
+        var pattern;
+        try {
+            pattern=JSON.parse(text_box.value)
+            console.log(pattern)
+        } catch (e) {
+            alert("Invalid JSON format")
+            return ;
+        }
+
+        if(! pattern instanceof Array)
+        {
+            alert("Input should be an array of block_info");
+            return;
+        }
+
+        if(pattern.length==0)
+        {
+            alert("Should have at least 1 block_info");
+            return;
+        }
+
+        for (var block_info of pattern)
+            if(!check_block_info(block_info))
+            {
+                alert("Block `"+JSON.stringify(block_info)+"` is not valid")
+                return
+            }
+
+        fetch('/control/pattern_input', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(pattern)
+        })
+        .then(response => window.location.reload())
+    }
+</script>
+<body>
+    {% set check_func=(job["check_func"] if job["check_func"] else "Default(check_square)") %}
+
+    <b>Check Function</b>: {{check_func}}
+
+    <br>
+    Use:
+        <a href="./pattern_select/">Default</a>
+        <a href="./pattern_select/check_custom"> Custom</a>
+
+    <br>
+    <br>
+
+    {% set y_min=(job["y_level"] if type(job["y_level"]) == int else job["y_level"][0]) %}
+    {% set y_max=(job["y_level"] if type(job["y_level"]) == int else job["y_level"][1]) %}
+    {% set y_target=(job["y_level"] if type(job["y_level"]) == int else
+                                        round((job["y_level"][0]+job["y_level"][1]) / 2)) %}
+    Y level:
+    <form class="" action="./y_level" method="post">
+        <table style="text-align: center;">
+            <thead>
+                <tr>
+                    <th colspan="2">Range</th>
+                    <th rowspan="2">Target</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><label for="min_y">Y min</label></td>
+                    <td><label for="max_y">Y max</label></td>
+                </tr>
+                <tr>
+                    <td><input type="text" name="min_y" value="{{y_min}}" style=" width: 40px; "></td>
+                    <td><input type="text" name="max_y" value="{{y_max}}" style=" width: 40px; "></td>
+                    <td><input type="text" name="target_y" value="{{y_target}}" style=" width: 40px; "></td>
+                </tr>
+                <tr>
+                    <td colspan="2" >
+                        <input type="submit" name="range" value="Submit Range"></td>
+                    <td><input type="submit" name="target" value="Submit Target"></td>
+                </tr>
+            </tbody>
+        </table>
+
+
+    </form>
+
+    <br>
+    <br>
+
+    Custom check pattern:
+    <br>
+
+    <b>[[X, Y, Z], rot]</b> <br>
+
+    {% set block_count=len(job["check_pattern"])%}
+    <!-- bc jinja2 the for needs to look like this for formating -->
+    <textarea id="pattern" style="
+        min-width: 300;
+        min-height: 300;
+    ">
+[{% for i, block_info in enumerate(job["check_pattern"]) %}
+    {{str(block_info) + ("," if i != block_count-1 else "")}}{% endfor %}
+]
+    </textarea>
+
+    <br>
+    <br>
+
+    <button type="button" name="SUBMIT" onclick="submit()">APPLY</button>
+
+    <br>
+    <br>
+
+    <a href="./pattern_input/reset">RESET PATTERN</a>
+
+    <br>
+<textarea name="name" rows="8" cols="30">
+[
+    [[0, 0, 0], 0],
+    [[0, 0, 1], 0],
+    [[0, 0, 2], 0],
+    [[0, 0, 3], 0],
+    [[1, 0, 0], 0],
+    [[1, 0, 1], 0],
+    [[1, 0, 2], 0],
+    [[1, 0, 3], 0],
+    [[2, 0, 0], 0],
+    [[2, 0, 1], 0],
+    [[2, 0, 2], 0],
+    [[2, 0, 3], 0],
+    [[3, 0, 0], 0],
+    [[3, 0, 1], 0],
+    [[3, 0, 2], 0],
+    [[3, 0, 3], 0]
+]
+</textarea>
+</body>
