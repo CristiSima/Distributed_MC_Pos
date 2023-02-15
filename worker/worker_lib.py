@@ -50,7 +50,7 @@ def compile_cuda(block_count, core_count, overload_factor, local_offset, thread_
     else:
         y_level=""
 
-    my_system(f"nvcc main.cu -o {exec_name} -g "
+    my_system(f"nvcc main.cu -o {exec_name} "
         f" -D BLOCK_COUNT={block_count} "
         f" -D CORE_COUNT={core_count} "
         f" -D OVERLOAD_FACTOR={overload_factor} "
@@ -119,21 +119,23 @@ if __name__ == "__main__":
             maker.add((i, 0, j), 0)
     maker.save()
 
-    # bf_GPU_max_block_multiplyer(768, 100_000)
+    # bf_GPU_max_block_multiplyer(1024, 100_000)
     # exit()
-    block_multiplyer=6
+    block_multiplyer=6*2
+    block_size=128*8
     c_overload=1
     cuda_overload=1
     search_function=None
     # search_function="basic_search"
+    # a="compiled/main_cuda_1_1024_0_1024.exe"
     # a=compile_c(12, c_overload, 0, 12*c_overload, 100_000, "check_custom")
     tot,lim=120, 100_000
     # a=compile_c(12, 1, 0, tot, lim, "check_custom")
     # a=compile_cuda(6, 768, 0, 6*768,  60_000, "check_custom")
     # a=compile_cuda(block_multiplyer, 768, 0, block_multiplyer*768,  60_000, "check_custom")
-    a=compile_cuda(block_multiplyer, 767, cuda_overload, 0, block_multiplyer*767*cuda_overload,  100_000, "check_custom", search_function)
+    a=compile_cuda(block_multiplyer, block_size, cuda_overload, 0, block_multiplyer*block_size*cuda_overload,  100_000, "check_custom", search_function)
     # a=compile_cuda(6, 768, 0, tot,lim, "check_custom")
     # a=compile_cuda(block_multiplyer, 768, 0, block_multiplyer*768,  1_000_000, "check_custom")
     print(a)
     # exit()
-    print(*run_file(a), sep="\n")
+    # print(*run_file(a), sep="\n")

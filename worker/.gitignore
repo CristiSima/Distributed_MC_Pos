@@ -1,3 +1,6 @@
 compiled/*
 !compiled/.gitkeep
 custom.h
+worker_info.json
+
+!compiled/setup.exe
