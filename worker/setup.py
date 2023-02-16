@@ -1,4 +1,5 @@
 import worker_lib
+import worker
 import os
 import json
 
@@ -12,7 +13,7 @@ def setup_cpu():
 
     print("Benchmarking...")
     print("Compiling Benchmark")
-    exec_path=worker_lib.compile_c(
+    exec_path=worker.compile_c(
         core_count=cpu_cores,
         overload_factor=1, local_offset=0,
         thread_count=cpu_cores,
@@ -43,7 +44,7 @@ def setup_gpu():
     sp_cores=int(setup_output.split("\n")[3].split(" ")[-1])
 
     print("Compiling benchmark")
-    benchmark_exec=worker_lib.compile_cuda(
+    benchmark_exec=worker.compile_cuda(
         block_count=mp_count,
         core_count=threads_per_block,
         overload_factor=1,

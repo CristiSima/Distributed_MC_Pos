@@ -2,11 +2,18 @@ from flask import Flask, Blueprint, request, render_template, redirect
 from uuid import uuid1 as uuid, UUID
 from threading import Lock
 from copy import deepcopy
+import tempfile
+import shutil
+import os
+import base64
+from importlib.machinery import SourceFileLoader
+worker_lib= SourceFileLoader("worker_lib", "../worker/worker_lib.py").load_module()
 import distribute
 app = Flask(__name__)
 
 worker = Blueprint('worker', __name__, url_prefix="/worker")
 control = Blueprint('control', __name__, url_prefix="/control")
+compile = Blueprint('compile', __name__, url_prefix="/compile")
 
 def job_locked(func):
     def temp(*args, **kwargs):
@@ -332,6 +339,56 @@ def control_y_level():
     return redirect("/control/pattern")
 
 
+@compile.post("/c")
+def compile_c():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        shutil.copy("../worker/base.h", temp_dir)
+        shutil.copy("../worker/main.c", temp_dir)
+        os.mkdir(f"{temp_dir}/compiled")
+
+        check_maker=worker_lib.check_maker()
+        for block_info in request.json["check_pattern"]:
+            check_maker.add(*block_info)
+        check_maker.save(cwd=temp_dir)
+
+        compile_args=request.json["compile_args"]
+        # TODO some validation should be done here
+        exec_name=worker_lib.compile_c(**compile_args, cwd=temp_dir)
+
+        with open(f"{temp_dir}/{exec_name}", "rb") as f:
+            b64_exec=base64.b64encode(f.read()).decode()
+
+        return {
+            "exec_name": exec_name,
+            "b64_exec": b64_exec
+        }
+
+
+
+@compile.post("/cuda")
+def compile_cuda():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        shutil.copy("../worker/base.h", temp_dir)
+        shutil.copy("../worker/main.cu", temp_dir)
+        os.mkdir(f"{temp_dir}/compiled")
+
+        check_maker=worker_lib.check_maker()
+        for block_info in request.json["check_pattern"]:
+            check_maker.add(*block_info)
+        check_maker.save(cwd=temp_dir)
+
+        compile_args=request.json["compile_args"]
+        # TODO some validation should be done here
+        exec_name=worker_lib.compile_cuda(**compile_args, cwd=temp_dir)
+
+        with open(f"{temp_dir}/{exec_name}", "rb") as f:
+            b64_exec=base64.b64encode(f.read()).decode()
+
+        return {
+            "exec_name": exec_name,
+            "b64_exec": b64_exec
+        }
+
 '''
 
 features:
@@ -356,5 +413,6 @@ worker api:
 
 app.register_blueprint(worker)
 app.register_blueprint(control)
+app.register_blueprint(compile)
 if __name__=="__main__":
     app.run(host="0.0.0.0", debug=True)

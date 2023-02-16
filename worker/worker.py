@@ -5,6 +5,8 @@ from queue import Queue
 from threading import Thread, Event
 from time import sleep
 import worker_lib
+import base64
+
 
 def roundup(nr):    return (int(nr) if nr == round(nr) else int(nr)+1)
 
@@ -57,18 +59,14 @@ def post(url, json_payload=None, headers=None):
 
     return response
 
-with open("worker_info.json") as f:
-    worker_info=json.load(f)
-cpu_info=worker_info["cpu"]
-gpu_info=worker_info["gpu"]
-
 current_id=None
-BASE_URL="http://192.168.0.200:5000/worker/"
+master_server_address="192.168.0.200:5000"
+WORKER_URL =f"http://{master_server_address}/worker/"
+COMPILE_URL=f"http://{master_server_address}/compile/"
 
-current_id=None
 def get_id():
     global current_id
-    resp,resp_code = post(BASE_URL+"register", worker_info)
+    resp,resp_code = post(WORKER_URL+"register", worker_info)
     if resp_code==200:
         current_id=resp["id"]
     print(resp)
@@ -90,7 +88,7 @@ def cpu_process(job):
         return
 
     print("cpu", cpu_work)
-    exec_name=worker_lib.compile_c(
+    exec_name=compile_c(
         core_count=cpu_info["core_count"],
         overload_factor=cpu_work["overload_factor"],
         local_offset=cpu_work["local_offset"],
@@ -105,12 +103,11 @@ def cpu_process(job):
     possitions=[line[8:] for line in output.split("\n") if line.startswith("FOUND")]
     possitions=[list(map(int,pos.split(" "))) for pos in possitions]
     print("possitions:", possitions)
-    post(BASE_URL+f"submit/{current_id}/cpu", {
+    post(WORKER_URL+f"submit/{current_id}/cpu", {
         "possitions": possitions,
         "threads_processed": cpu_work["local_threads"]
     })
 cpu_queue, cpu_thread=create_processor(cpu_process)
-cpu_thread.start()
 
 def gpu_process(job):
     gpu_work=job["gpu_work"]
@@ -118,7 +115,7 @@ def gpu_process(job):
         return
 
     print("gpu", gpu_work)
-    exec_name=worker_lib.compile_cuda(
+    exec_name=compile_cuda(
         block_count=gpu_info["block_count"],
         core_count=gpu_info["block_size"],
         overload_factor=gpu_work["overload_factor"],
@@ -134,31 +131,72 @@ def gpu_process(job):
     possitions=[line[8:] for line in output.split("\n") if line.startswith("FOUND")]
     possitions=[list(map(int,pos.split(" "))) for pos in possitions]
     print("possitions:", possitions)
-    post(BASE_URL+f"submit/{current_id}/gpu", {
+    post(WORKER_URL+f"submit/{current_id}/gpu", {
         "possitions": possitions,
         "threads_processed": gpu_work["local_threads"]
     })
 gpu_queue, gpu_thread=create_processor(gpu_process)
-gpu_thread.start()
 
+can_compile_localy=False
 
-while not current_id:
-    get_id()
+def compile_c(**kwargs):
+    if can_compile_localy:
+        return worker_lib.compile_c(**kwargs)
 
-while True:
-    resp,resp_code = get(BASE_URL+"sync/"+current_id)
-    if resp_code==404:
+    response, resp_code=post(COMPILE_URL+"c", json_payload={
+        "compile_args": kwargs,
+        "check_pattern": resp["check_pattern"]
+    })
+
+    with open(response["exec_name"], "wb") as f:
+        f.write(base64.b64decode(response["b64_exec"].encode()))
+
+    return response["exec_name"]
+
+def compile_cuda(**kwargs):
+    if can_compile_localy:
+        return worker_lib.compile_cuda(**kwargs)
+
+    response, resp_code=post(COMPILE_URL+"cuda", json_payload={
+        "compile_args": kwargs,
+        "check_pattern": resp["check_pattern"]
+    })
+
+    with open(response["exec_name"], "wb") as f:
+        f.write(base64.b64decode(response["b64_exec"].encode()))
+
+    return response["exec_name"]
+
+if __name__ == '__main__':
+    with open("worker_info.json") as f:
+        worker_info=json.load(f)
+    cpu_info=worker_info["cpu"]
+    gpu_info=worker_info["gpu"]
+
+    cpu_thread.start()
+    gpu_thread.start()
+
+    while not current_id:
         get_id()
-    else:
-        if resp["start_flag"] and resp["check_func"]=="check_custom":
-            # update custom check when a new job starts and it's used
-            maker=worker_lib.check_maker()
-            for block_info in resp["check_pattern"]:
-                maker.add(*block_info)
-            maker.save()
 
-        cpu_queue.put(resp)
-        gpu_queue.put(resp)
+    while True:
+        resp,resp_code = get(WORKER_URL+"sync/"+current_id)
+        if resp_code==404:
+            get_id()
+        else:
+            if resp["start_flag"] and resp["check_func"]=="check_custom":
+                # update custom check when a new job starts and it's used
+                maker=worker_lib.check_maker()
+                for block_info in resp["check_pattern"]:
+                    maker.add(*block_info)
+                maker.save()
 
-    print(resp)
-    time.sleep(5)
+            cpu_queue.put(resp)
+            gpu_queue.put(resp)
+
+        print(resp)
+        time.sleep(5)
+else:
+    resp={
+        "check_pattern":[]
+    }

@@ -4,11 +4,11 @@ import os
 
 cc="gcc"
 
-def my_system(args):
-    sp.Popen(args, shell=True).wait()
+def my_system(args, *, cwd="."):
+    sp.Popen(args, shell=True, cwd=cwd).wait()
 
 def compile_c(core_count, overload_factor, local_offset, thread_count, world_limit,
-        check_func=None, search_function=None, y_level=None):
+        check_func=None, search_function=None, y_level=None, *, cwd="."):
     exec_name=f"compiled/main_c_{core_count}_{local_offset}_{thread_count}"
 
     if y_level:
@@ -30,13 +30,14 @@ def compile_c(core_count, overload_factor, local_offset, thread_count, world_lim
         f" -D WORLD_LIMIT={world_limit} "+
         y_level+
         (f" -D check_func={check_func} " if check_func else "")+
-        (f" -D search_function={search_function} " if search_function else "")
+        (f" -D search_function={search_function} " if search_function else ""),
+        cwd=cwd,
     )
 
     return f"{exec_name}.exe"
 
 def compile_cuda(block_count, core_count, overload_factor, local_offset, thread_count, world_limit,
-        check_func=None, search_function=None, y_level=None):
+        check_func=None, search_function=None, y_level=None, *, cwd="."):
     exec_name=f"compiled/main_cuda_{block_count}_{core_count}_{local_offset}_{thread_count}"
 
     if y_level:
@@ -59,7 +60,8 @@ def compile_cuda(block_count, core_count, overload_factor, local_offset, thread_
         f" -D WORLD_LIMIT={world_limit} "+
         y_level+
         (f" -D check_func={check_func} " if check_func else "")+
-        (f" -D search_function={search_function} " if search_function else "")
+        (f" -D search_function={search_function} " if search_function else ""),
+        cwd=cwd,
     )
 
     return f"{exec_name}.exe"
@@ -106,8 +108,8 @@ MODIFIER int {self.name}(int x, int y, int z)
 }
 '''
         return res
-    def save(self):
-        with open("custom.h", "w") as f:
+    def save(self, *, cwd="."):
+        with open(f"{cwd}/custom.h", "w") as f:
             f.write(self.gen())
 
 
